@@ -17,35 +17,31 @@ public class Server {
     private static final String FILE = "-file";
     private static int clientCounter = 1;
     private static final List<ActiveConnectionData> ACTIVE_CONNECTIONS = new ArrayList<>();
-    static ExecutorService executorService = Executors.newCachedThreadPool();
 
     public static void start() {
-
-        try {
-            ServerSocket ss = new ServerSocket(PORT);
+        try (ServerSocket ss = new ServerSocket(PORT)) {
             LOGGER.info("Server started");
-
-            Socket clientSocket = ss.accept();
-
-            executorService.execute(() -> {
+            while (true) {
+                Socket clientSocket = ss.accept();
                 connectClient(clientSocket);
                 executeClientsCommand(clientSocket);
-            });
-
+            }
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
 
-
     public static void connectClient(Socket clientSocket) {
+        ActiveConnectionData activeConnectionData = new ActiveConnectionData();
         String clientName = createClientName();
         long timeOfConnection = System.currentTimeMillis();
-        ActiveConnectionData activeConnectionData = new ActiveConnectionData(clientName, timeOfConnection, clientSocket);
+        activeConnectionData.setName(clientName);
+        activeConnectionData.setTimeOfConnection(timeOfConnection);
+        activeConnectionData.setClientSocket(clientSocket);
         ACTIVE_CONNECTIONS.add(activeConnectionData);
         LOGGER.info(clientName + " has been connected successfully. Time of connection is: " + timeOfConnection + "ms");
-        sendMessage("[SERVER]" + clientName + " has been connected successfully. Time of connection is:" + timeOfConnection + "ms");
     }
+
 
     public static void executeClientsCommand(Socket clientSocket) {
         try {
@@ -53,7 +49,8 @@ public class Server {
             String command = dis.readUTF();
             if ((command.trim().equals(EXIT))) {
                 stopConnectionWithClient(clientSocket);
-            } else if ((command.trim().startsWith(FILE))) {
+            }
+            if ((command.trim().startsWith(FILE))) {
                 receiveFile(clientSocket, command.trim().split(" ")[1].trim());
             }
         } catch (IOException e) {
@@ -61,25 +58,17 @@ public class Server {
         }
     }
 
-    public static void stopConnectionWithClient(Socket clientSocket) throws IOException {
+    public static void stopConnectionWithClient(Socket clientSocket)  {
         LOGGER.info(getClientName(clientSocket) + " was disconnected");
-        sendMessage("[SERVER] " + getClientName(clientSocket) + " was disconnected.");
-        clientSocket.close();
+        try {
+            clientSocket.close();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
         ACTIVE_CONNECTIONS.removeIf(activeConnectionData -> activeConnectionData.getClientSocket() == clientSocket);
 
     }
 
-
-    public static void sendMessage(String message) {
-        for (ActiveConnectionData connectionData : ACTIVE_CONNECTIONS) {
-            try {
-                DataOutputStream dos = new DataOutputStream(connectionData.getClientSocket().getOutputStream());
-                dos.writeUTF(message);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        }
-    }
 
     public static void receiveFile(Socket clientSocket, String filePath) {
         try {
@@ -91,9 +80,7 @@ public class Server {
                 writer.write(new String(buffer, 0, bytesReaded));
             }
             writer.close();
-
             LOGGER.info("File received from " + getClientName(clientSocket));
-            sendMessage("[SERVER] File received from " + getClientName(clientSocket));
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

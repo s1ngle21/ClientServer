@@ -1,9 +1,11 @@
 import java.io.*;
 import java.net.Socket;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.logging.Logger;
 
 
-public class Client {
+public class Client implements Runnable {
 
     private static final Logger LOGGER = Logger.getLogger(Client.class.getName());
     private static final String HOST = "localhost";
@@ -11,65 +13,35 @@ public class Client {
     private static final String FILE = "-file";
     private static final int PORT = 4567;
 
-    public static void main(String[] args) {
+
+    @Override
+    public void run() {
         connectToServer();
     }
 
-
     public static void connectToServer() {
-        try {
-            Socket clientSocket = new Socket(HOST, PORT);
-            DataInputStream dis = new DataInputStream(clientSocket.getInputStream());
-            DataOutputStream dos = new DataOutputStream(clientSocket.getOutputStream());
-
-            LOGGER.info("Connected to server");
-
-            handleMessage(dis);
-
-            Thread t = new Thread(() -> {
-                try {
-                    handleCommand(dos);
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
-            });
-            t.join();
-            t.start();
-
-            handleMessage(dis);
-
-
-        } catch (IOException | InterruptedException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    public static void handleMessage(DataInputStream dis) {
-        try {
-            String message = dis.readUTF();
-            LOGGER.info(message);
+        try (Socket clientSocket = new Socket(HOST, PORT);
+             var out = new DataOutputStream(clientSocket.getOutputStream())) {
+            handleCommand(out);
+            out.write(Files.readAllBytes(Paths.get("test.txt")));
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-
     }
 
-    public static void handleCommand(DataOutputStream dos) throws IOException {
+    public static void handleCommand(DataOutputStream out) throws IOException {
         LOGGER.info("Write a command");
         String command;
-
         try {
             BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
             command = reader.readLine();
-            dos.writeUTF(command);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-
         if (command.startsWith(FILE)) {
-            sendFile(dos, command.trim().split(" ")[1].trim());
+            sendFile(out, command.trim().split(" ")[1].trim());
         } else {
-            LOGGER.info("Disconnected from server");
+            out.writeUTF(command);
         }
     }
 
@@ -86,8 +58,5 @@ public class Client {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-
     }
-
-
 }

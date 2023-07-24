@@ -11,6 +11,9 @@ public class ActiveConnectionData {
         this.clientSocket = clientSocket;
     }
 
+    public ActiveConnectionData() {
+    }
+
     public String getName() {
         return name;
     }
